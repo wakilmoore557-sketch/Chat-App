@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat App</title>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial;
+      display: flex;
+      height: 100vh;
+      background: linear-gradient(-45deg,#667eea,#764ba2,#6a11cb,#2575fc);
+      background-size: 400% 400%;
+      animation: bgMove 10s ease infinite;
+      color: white;
+    }
+
+    @keyframes bgMove {
+      0%{background-position:0% 50%}
+      50%{background-position:100% 50%}
+      100%{background-position:0% 50%}
+    }
+
+    .sidebar {
+      width: 30%;
+      background: rgba(0,0,0,0.3);
+      padding: 10px;
+      overflow-y: auto;
+    }
+
+    .chatArea {
+      width: 70%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 10px;
+      background: rgba(0,0,0,0.4);
+    }
+
+    .membersTop {
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .memberTag {
+      display: inline-block;
+      background: rgba(255,255,255,0.2);
+      padding: 5px 10px;
+      margin: 3px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .group, .user {
+      padding: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      cursor: pointer;
+    }
+
+    .group:hover, .user:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .messages {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+    }
+
+    .msg {
+      margin-bottom: 10px;
+      background: rgba(255,255,255,0.2);
+      padding: 8px;
+      border-radius: 10px;
+    }
+
+    .inputBox {
+      display: flex;
+      padding: 10px;
+      background: rgba(0,0,0,0.4);
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+    }
+
+    button {
+      margin-left: 5px;
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      background: #00c6ff;
+      color: white;
+    }
+
+    .plusBtn {
+      float: right;
+      cursor: pointer;
+      font-size: 16px;
+      background: #00c6ff;
+      padding: 5px 10px;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="sidebar">
+  <h3>Groups <span class="plusBtn" onclick="openModal()">➕</span></h3>
+  <div id="groups"></div>
+
+  <hr>
+
+  <h3>Contacts <span class="plusBtn" onclick="openPrivateModal()">➕</span></h3>
+  <div id="users"></div>
+</div>
+
+<div class="chatArea">
+  <div class="header">
+    <div id="chatTitle">Select a chat</div>
+    <div id="membersTop" class="membersTop"></div>
+  </div>
+
+  <div class="messages" id="messages"></div>
+
+  <div class="inputBox">
+    <input id="message" placeholder="Type message">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<!-- GROUP MODAL -->
+<div id="modal" style="display:none; position:fixed; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center;">
+  <div style="background:white; padding:20px; border-radius:10px; color:black;">
+    <h3>Create Group</h3>
+    <input id="groupName" placeholder="Group Name"><br><br>
+    <button onclick="createGroup()">Create</button>
+    <button onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- ADD CONTACT MODAL -->
+<div id="privateModal" style="display:none; position:fixed; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center;">
+  <div style="background:white; padding:20px; border-radius:10px; color:black; width:300px;">
+    <h3>Add Contact</h3>
+    <input id="contactName" placeholder="Display Name"><br><br>
+    <input id="contactUsername" placeholder="Username"><br><br>
+    <button onclick="saveContact()">Save</button>
+    <button onclick="closePrivateModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- USER INFO -->
+<div id="userInfoModal" style="display:none; position:fixed; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center;">
+  <div style="background:white; padding:20px; border-radius:10px; color:black;">
+    <h3>User Info</h3>
+    <p id="infoName"></p>
+    <button onclick="startPrivateChat()">Message</button>
+    <button onclick="closeUserInfo()">Close</button>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const username = localStorage.getItem("username");
+
+let currentGroup = null;
+let currentUserChat = null;
+let selectedUser = null;
+let currentMembers = [];
+
+/* LOAD GROUPS */
+db.collection("groups").onSnapshot(snapshot=>{
+  const div=document.getElementById("groups");
+  div.innerHTML="";
+  snapshot.forEach(doc=>{
+    const g=doc.data();
+    if(g.members.includes(username)){
+      let el=document.createElement("div");
+      el.className="group";
+      el.innerText=g.name;
+      el.onclick=()=>openGroup(doc.id,g);
+      div.appendChild(el);
+    }
+  });
+});
+
+/* LOAD CONTACTS */
+db.collection("users").doc(username).collection("contacts")
+.onSnapshot(snapshot=>{
+  const div=document.getElementById("users");
+  div.innerHTML="";
+  snapshot.forEach(doc=>{
+    const data=doc.data();
+    let el=document.createElement("div");
+    el.className="user";
+    el.innerText=data.name;
+    el.onclick=()=>openUserInfo(data.username);
+    div.appendChild(el);
+  });
+});
+
+/* GROUP */
+function openGroup(id,data){
+  currentGroup=id;
+  currentUserChat=null;
+  currentMembers=data.members;
+
+  document.getElementById("chatTitle").innerText=data.name;
+  renderMembers();
+
+  db.collection("groups").doc(id).collection("messages").orderBy("time")
+  .onSnapshot(snapshot=>{
+    const msgDiv=document.getElementById("messages");
+    msgDiv.innerHTML="";
+    snapshot.forEach(doc=>{
+      let d=doc.data();
+      msgDiv.innerHTML+=`<div class="msg"><b>${d.username}</b><br>${d.text}</div>`;
+    });
+  });
+}
+
+/* MEMBERS */
+function renderMembers(){
+  const top=document.getElementById("membersTop");
+  top.innerHTML="<b>Members:</b> ";
+
+  currentMembers.forEach(m=>{
+    let span=document.createElement("span");
+    span.className="memberTag";
+    span.innerText=m;
+    span.onclick=()=>openUserInfo(m);
+    top.appendChild(span);
+  });
+
+  let addBtn=document.createElement("span");
+  addBtn.className="memberTag";
+  addBtn.innerText="+ Add";
+  addBtn.onclick=addMemberPrompt;
+  top.appendChild(addBtn);
+}
+
+function addMemberPrompt(){
+  let name=prompt("Enter username:");
+  if(!name) return;
+
+  if(!currentMembers.includes(name)){
+    currentMembers.push(name);
+    db.collection("groups").doc(currentGroup).update({
+      members: currentMembers
+    });
+  }
+}
+
+/* CONTACT MODAL */
+function openPrivateModal(){
+  document.getElementById("privateModal").style.display="flex";
+}
+function closePrivateModal(){
+  document.getElementById("privateModal").style.display="none";
+}
+
+/* SAVE CONTACT */
+function saveContact(){
+  const name=document.getElementById("contactName").value;
+  const user=document.getElementById("contactUsername").value;
+
+  if(!name||!user) return alert("Fill all");
+
+  db.collection("users").doc(username).collection("contacts").add({
+    name:name,
+    username:user
+  });
+
+  closePrivateModal();
+
+  document.getElementById("contactName").value="";
+  document.getElementById("contactUsername").value="";
+}
+
+/* USER INFO */
+function openUserInfo(user){
+  selectedUser=user;
+  document.getElementById("infoName").innerText="Username: "+user;
+  document.getElementById("userInfoModal").style.display="flex";
+}
+
+function closeUserInfo(){
+  document.getElementById("userInfoModal").style.display="none";
+}
+
+/* PRIVATE CHAT */
+function startPrivateChat(){
+  currentGroup=null;
+  currentUserChat=selectedUser;
+
+  document.getElementById("chatTitle").innerText="Chat with "+selectedUser;
+
+  const chatId=[username,selectedUser].sort().join("_");
+
+  db.collection("privateChats").doc(chatId).collection("messages").orderBy("time")
+  .onSnapshot(snapshot=>{
+    const msgDiv=document.getElementById("messages");
+    msgDiv.innerHTML="";
+    snapshot.forEach(doc=>{
+      let d=doc.data();
+      msgDiv.innerHTML+=`<div class="msg"><b>${d.sender}</b><br>${d.text}</div>`;
+    });
+  });
+
+  closeUserInfo();
+}
+
+/* SEND MESSAGE */
+function sendMessage(){
+  let text=document.getElementById("message").value;
+  if(!text) return;
+
+  if(currentGroup){
+    db.collection("groups").doc(currentGroup).collection("messages").add({
+      username: username,
+      text: text,
+      time: Date.now()
+    });
+  }
+
+  if(currentUserChat){
+    let chatId=[username,currentUserChat].sort().join("_");
+    db.collection("privateChats").doc(chatId).collection("messages").add({
+      sender: username,
+      text: text,
+      time: Date.now()
+    });
+  }
+
+  document.getElementById("message").value="";
+}
+
+/* GROUP */
+function openModal(){document.getElementById("modal").style.display="flex";}
+function closeModal(){document.getElementById("modal").style.display="none";}
+
+function createGroup(){
+  let name=document.getElementById("groupName").value;
+  if(!name) return;
+
+  db.collection("groups").add({
+    name:name,
+    members:[username],
+    createdAt:Date.now()
+  });
+
+  closeModal();
+}
+</script>
+
+</body>
+</html>
