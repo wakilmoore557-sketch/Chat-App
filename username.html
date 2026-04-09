@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Username</title>
+  <style>
+    body {
+      height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      background:linear-gradient(-45deg,#667eea,#764ba2,#6a11cb,#2575fc);
+      background-size:400% 400%;
+      animation:bg 10s ease infinite;
+      font-family:Arial;
+      color:white;
+    }
+
+    @keyframes bg {
+      0%{background-position:0% 50%}
+      50%{background-position:100% 50%}
+      100%{background-position:0% 50%}
+    }
+
+    .box {
+      width:320px;
+      padding:25px;
+      border-radius:20px;
+      background:rgba(255,255,255,0.15);
+      backdrop-filter:blur(15px);
+      text-align:center;
+    }
+
+    input, button {
+      width:100%;
+      padding:12px;
+      margin-top:10px;
+      border-radius:10px;
+      border:none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="box">
+  <h2>Set Username</h2>
+
+  <input id="username" placeholder="Enter username">
+
+  <button onclick="suggest()">Suggest Username</button>
+  <button onclick="next()">Continue</button>
+</div>
+
+<script>
+function suggest() {
+  const names = ["star","king","vibe","ghost","flex"];
+  const random = Math.floor(Math.random()*1000);
+
+  document.getElementById("username").value =
+    names[Math.floor(Math.random()*names.length)] + random;
+}
+
+function next() {
+  const username = document.getElementById("username").value;
+
+  if (!username) {
+    alert("Enter username");
+    return;
+  }
+
+  localStorage.setItem("username", username);
+  window.location.href = "dob.html";
+}
+</script>
+
+</body>
+</html>
